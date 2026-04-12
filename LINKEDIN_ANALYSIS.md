@@ -339,3 +339,105 @@ SHOW TABLES IN SCHEMA LINKEDIN.SILVER;
 > **Problème rencontré :** Les colonnes booléennes `remote_allowed`, `sponsored`
 > et `inferred` contenaient des valeurs `1.0`/`0.0` non reconnues par Snowflake.
 > **Solution :** Utilisation d'un `CASE WHEN` pour convertir manuellement ces valeurs.
+
+## Étape 5 — Couche GOLD (Analyses)
+
+Les 5 analyses sont créées sous forme de vues dans la couche GOLD,
+prêtes à être consommées par Streamlit.
+
+```sql
+USE SCHEMA LINKEDIN.GOLD;
+
+-- Analyse 1 : Top 10 des titres de postes par industrie
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY AS
+SELECT
+    ci.industry                      AS industry,
+    jp.title                         AS job_title,
+    COUNT(*)                         AS nb_postings,
+    ROW_NUMBER() OVER (
+        PARTITION BY ci.industry
+        ORDER BY COUNT(*) DESC
+    )                                AS rank
+FROM LINKEDIN.SILVER.JOB_POSTINGS jp
+JOIN LINKEDIN.SILVER.COMPANY_INDUSTRIES ci
+    ON jp.company_name = ci.company_id::STRING
+GROUP BY ci.industry, jp.title
+QUALIFY rank <= 10;
+
+-- Analyse 2 : Top 10 des postes les mieux rémunérés par industrie
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_SALARIES_BY_INDUSTRY AS
+SELECT
+    ci.industry                      AS industry,
+    jp.title                         AS job_title,
+    ROUND(AVG(jp.max_salary), 2)     AS avg_max_salary,
+    ROUND(AVG(jp.med_salary), 2)     AS avg_med_salary,
+    ROUND(AVG(jp.min_salary), 2)     AS avg_min_salary,
+    COUNT(*)                         AS nb_postings,
+    ROW_NUMBER() OVER (
+        PARTITION BY ci.industry
+        ORDER BY AVG(jp.max_salary) DESC
+    )                                AS rank
+FROM LINKEDIN.SILVER.JOB_POSTINGS jp
+JOIN LINKEDIN.SILVER.COMPANY_INDUSTRIES ci
+    ON jp.company_name = ci.company_id::STRING
+WHERE jp.max_salary IS NOT NULL
+GROUP BY ci.industry, jp.title
+QUALIFY rank <= 10;
+
+-- Analyse 3 : Répartition des offres par taille d'entreprise
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_COMPANY_SIZE AS
+SELECT
+    CASE c.company_size
+        WHEN 0 THEN '0 - Très petite (1-10)'
+        WHEN 1 THEN '1 - Petite (11-50)'
+        WHEN 2 THEN '2 - Moyenne (51-200)'
+        WHEN 3 THEN '3 - Intermédiaire (201-500)'
+        WHEN 4 THEN '4 - Grande (501-1000)'
+        WHEN 5 THEN '5 - Très grande (1001-5000)'
+        WHEN 6 THEN '6 - Très grande (5001-10000)'
+        WHEN 7 THEN '7 - Entreprise (10000+)'
+        ELSE 'Non renseigné'
+    END                              AS company_size_label,
+    COUNT(*)                         AS nb_postings
+FROM LINKEDIN.SILVER.JOB_POSTINGS jp
+JOIN LINKEDIN.SILVER.COMPANIES c
+    ON jp.company_name = c.name
+GROUP BY c.company_size
+ORDER BY c.company_size;
+
+-- Analyse 4 : Répartition des offres par secteur d'activité
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_INDUSTRY AS
+SELECT
+    ji.industry_id::STRING           AS industry,
+    COUNT(*)                         AS nb_postings
+FROM LINKEDIN.SILVER.JOB_POSTINGS jp
+JOIN LINKEDIN.SILVER.JOB_INDUSTRIES ji
+    ON jp.job_id = ji.job_id
+GROUP BY ji.industry_id
+ORDER BY nb_postings DESC
+LIMIT 20;
+
+-- Analyse 5 : Répartition des offres par type d'emploi
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_WORK_TYPE AS
+SELECT
+    work_type                        AS work_type,
+    COUNT(*)                         AS nb_postings,
+    ROUND(COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (), 2)    AS percentage
+FROM LINKEDIN.SILVER.JOB_POSTINGS
+WHERE work_type IS NOT NULL
+GROUP BY work_type
+ORDER BY nb_postings DESC;
+```
+
+> Résultats de l'analyse 5 — Répartition par type d'emploi :
+
+| Type d'emploi | Nombre d'offres | Pourcentage |
+|---------------|----------------|-------------|
+| Full-time | 12 844 | 80.85% |
+| Contract | 1 739 | 10.95% |
+| Part-time | 1 010 | 6.36% |
+| Temporary | 121 | 0.70% |
+| Internship | 111 | 0.70% |
+| Other | 53 | 0.33% |
+| Volunteer | 8 | 0.05% |

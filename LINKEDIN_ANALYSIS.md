@@ -69,3 +69,90 @@ LIST @LINKEDIN.BRONZE.linkedin_stage;
 ```
 
 > Le `LIST` retourne 8 fichiers confirmant que la connexion S3 est opérationnelle.
+
+## Étape 2 — Création des tables BRONZE
+
+Dans la couche BRONZE, toutes les colonnes sont stockées en `STRING` 
+ou `VARIANT` (pour les JSON) afin de conserver les données brutes 
+sans aucune transformation.
+
+```sql
+USE SCHEMA LINKEDIN.BRONZE;
+
+-- Table job_postings
+CREATE TABLE IF NOT EXISTS LINKEDIN.BRONZE.JOB_POSTINGS (
+    job_id STRING,
+    company_name STRING,
+    title STRING,
+    description STRING,
+    max_salary STRING,
+    med_salary STRING,
+    min_salary STRING,
+    pay_period STRING,
+    formatted_work_type STRING,
+    location STRING,
+    applies STRING,
+    original_listed_time STRING,
+    remote_allowed STRING,
+    views STRING,
+    job_posting_url STRING,
+    application_url STRING,
+    application_type STRING,
+    expiry STRING,
+    closed_time STRING,
+    formatted_experience_level STRING,
+    skills_desc STRING,
+    listed_time STRING,
+    posting_domain STRING,
+    sponsored STRING,
+    work_type STRING,
+    currency STRING,
+    compensation_type STRING
+);
+
+-- Table benefits
+CREATE TABLE IF NOT EXISTS LINKEDIN.BRONZE.BENEFITS (
+    job_id STRING,
+    inferred STRING,
+    type STRING
+);
+
+-- Table companies (JSON → VARIANT)
+CREATE TABLE IF NOT EXISTS LINKEDIN.BRONZE.COMPANIES (
+    data VARIANT
+);
+
+-- Table company_industries (JSON → VARIANT)
+CREATE TABLE IF NOT EXISTS LINKEDIN.BRONZE.COMPANY_INDUSTRIES (
+    data VARIANT
+);
+
+-- Table company_specialities (JSON → VARIANT)
+CREATE TABLE IF NOT EXISTS LINKEDIN.BRONZE.COMPANY_SPECIALITIES (
+    data VARIANT
+);
+
+-- Table employee_counts
+CREATE TABLE IF NOT EXISTS LINKEDIN.BRONZE.EMPLOYEE_COUNTS (
+    company_id STRING,
+    employee_count STRING,
+    follower_count STRING,
+    time_recorded STRING
+);
+
+-- Table job_industries (JSON → VARIANT)
+CREATE TABLE IF NOT EXISTS LINKEDIN.BRONZE.JOB_INDUSTRIES (
+    data VARIANT
+);
+
+-- Table job_skills
+CREATE TABLE IF NOT EXISTS LINKEDIN.BRONZE.JOB_SKILLS (
+    job_id STRING,
+    skill_abr STRING
+);
+
+-- Vérification des tables créées
+SHOW TABLES IN SCHEMA LINKEDIN.BRONZE;
+```
+
+> Le `SHOW TABLES` confirme la création des 8 tables dans `LINKEDIN.BRONZE`.

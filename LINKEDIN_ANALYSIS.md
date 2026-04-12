@@ -36,8 +36,36 @@ Pour pouvoir charger les données dans Snowflake, il faut :
 
 ## Étape 1 — Setup
 
+Pour pouvoir charger les données dans Snowflake, il faut créer la base de données, 
+les schémas, le stage externe S3 et les formats de fichiers.
+
 ```sql
--- À venir
+-- Création de la base de données
+CREATE DATABASE IF NOT EXISTS LINKEDIN;
+
+-- Création des 3 schémas (Architecture Médaillon)
+CREATE SCHEMA IF NOT EXISTS LINKEDIN.BRONZE;
+CREATE SCHEMA IF NOT EXISTS LINKEDIN.SILVER;
+CREATE SCHEMA IF NOT EXISTS LINKEDIN.GOLD;
+
+-- Création du stage externe pointant vers le bucket S3
+CREATE OR REPLACE STAGE LINKEDIN.BRONZE.linkedin_stage
+    URL = 's3://snowflake-lab-bucket/';
+
+-- Format pour les fichiers CSV
+CREATE OR REPLACE FILE FORMAT LINKEDIN.BRONZE.csv_format
+    TYPE = 'CSV'
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    NULL_IF = ('NULL', 'null', '');
+
+-- Format pour les fichiers JSON
+CREATE OR REPLACE FILE FORMAT LINKEDIN.BRONZE.json_format
+    TYPE = 'JSON'
+    STRIP_OUTER_ARRAY = TRUE;
+
+-- Vérification du contenu du stage
+LIST @LINKEDIN.BRONZE.linkedin_stage;
 ```
 
----
+> Le `LIST` retourne 8 fichiers confirmant que la connexion S3 est opérationnelle.

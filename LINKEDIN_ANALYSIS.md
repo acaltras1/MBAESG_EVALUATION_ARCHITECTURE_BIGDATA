@@ -218,3 +218,124 @@ FILE_FORMAT = (FORMAT_NAME = 'LINKEDIN.BRONZE.json_format');
 | `COMPANY_INDUSTRIES` | 15 880 |
 | `COMPANY_SPECIALITIES` | 128 355 |
 | `JOB_INDUSTRIES` | 21 993 |
+
+## Étape 4 — Couche SILVER (Transformation et nettoyage)
+
+Dans la couche SILVER, on nettoie et type correctement chaque colonne.
+Les fichiers JSON sont aplatis via la notation `data:colonne::TYPE`.
+Les colonnes booléennes contenant `1.0`/`0.0` sont converties via `CASE WHEN`.
+Les timestamps Unix sont convertis en dates lisibles via `TO_TIMESTAMP`.
+
+```sql
+USE SCHEMA LINKEDIN.SILVER;
+
+-- Table JOB_POSTINGS nettoyée
+CREATE OR REPLACE TABLE LINKEDIN.SILVER.JOB_POSTINGS AS
+SELECT
+    job_id::INT                                    AS job_id,
+    company_name::STRING                           AS company_name,
+    title::STRING                                  AS title,
+    description::STRING                            AS description,
+    max_salary::FLOAT                              AS max_salary,
+    med_salary::FLOAT                              AS med_salary,
+    min_salary::FLOAT                              AS min_salary,
+    pay_period::STRING                             AS pay_period,
+    formatted_work_type::STRING                    AS work_type,
+    location::STRING                               AS location,
+    applies::INT                                   AS applies,
+    TO_TIMESTAMP(original_listed_time::INT / 1000) AS original_listed_time,
+    CASE
+        WHEN remote_allowed = '1.0' THEN TRUE
+        WHEN remote_allowed = '0.0' THEN FALSE
+        ELSE NULL
+    END                                            AS remote_allowed,
+    views::INT                                     AS views,
+    job_posting_url::STRING                        AS job_posting_url,
+    application_url::STRING                        AS application_url,
+    application_type::STRING                       AS application_type,
+    TO_TIMESTAMP(expiry::INT / 1000)               AS expiry,
+    TO_TIMESTAMP(closed_time::INT / 1000)          AS closed_time,
+    formatted_experience_level::STRING             AS experience_level,
+    skills_desc::STRING                            AS skills_desc,
+    TO_TIMESTAMP(listed_time::INT / 1000)          AS listed_time,
+    posting_domain::STRING                         AS posting_domain,
+    CASE
+        WHEN sponsored = '1.0' THEN TRUE
+        WHEN sponsored = '0.0' THEN FALSE
+        ELSE NULL
+    END                                            AS sponsored,
+    currency::STRING                               AS currency,
+    compensation_type::STRING                      AS compensation_type
+FROM LINKEDIN.BRONZE.JOB_POSTINGS;
+
+-- Table BENEFITS nettoyée
+CREATE OR REPLACE TABLE LINKEDIN.SILVER.BENEFITS AS
+SELECT
+    job_id::INT AS job_id,
+    CASE
+        WHEN inferred = '1.0' THEN TRUE
+        WHEN inferred = '0.0' THEN FALSE
+        ELSE NULL
+    END         AS inferred,
+    type::STRING AS type
+FROM LINKEDIN.BRONZE.BENEFITS;
+
+-- Table COMPANIES extraite du JSON
+CREATE OR REPLACE TABLE LINKEDIN.SILVER.COMPANIES AS
+SELECT
+    data:company_id::INT     AS company_id,
+    data:name::STRING        AS name,
+    data:description::STRING AS description,
+    data:company_size::INT   AS company_size,
+    data:state::STRING       AS state,
+    data:country::STRING     AS country,
+    data:city::STRING        AS city,
+    data:zip_code::STRING    AS zip_code,
+    data:address::STRING     AS address,
+    data:url::STRING         AS url
+FROM LINKEDIN.BRONZE.COMPANIES;
+
+-- Table COMPANY_INDUSTRIES extraite du JSON
+CREATE OR REPLACE TABLE LINKEDIN.SILVER.COMPANY_INDUSTRIES AS
+SELECT
+    data:company_id::INT   AS company_id,
+    data:industry::STRING  AS industry
+FROM LINKEDIN.BRONZE.COMPANY_INDUSTRIES;
+
+-- Table COMPANY_SPECIALITIES extraite du JSON
+CREATE OR REPLACE TABLE LINKEDIN.SILVER.COMPANY_SPECIALITIES AS
+SELECT
+    data:company_id::INT    AS company_id,
+    data:speciality::STRING AS speciality
+FROM LINKEDIN.BRONZE.COMPANY_SPECIALITIES;
+
+-- Table EMPLOYEE_COUNTS nettoyée
+CREATE OR REPLACE TABLE LINKEDIN.SILVER.EMPLOYEE_COUNTS AS
+SELECT
+    company_id::INT                         AS company_id,
+    employee_count::INT                     AS employee_count,
+    follower_count::INT                     AS follower_count,
+    TO_TIMESTAMP(time_recorded::INT / 1000) AS time_recorded
+FROM LINKEDIN.BRONZE.EMPLOYEE_COUNTS;
+
+-- Table JOB_INDUSTRIES extraite du JSON
+CREATE OR REPLACE TABLE LINKEDIN.SILVER.JOB_INDUSTRIES AS
+SELECT
+    data:job_id::INT      AS job_id,
+    data:industry_id::INT AS industry_id
+FROM LINKEDIN.BRONZE.JOB_INDUSTRIES;
+
+-- Table JOB_SKILLS nettoyée
+CREATE OR REPLACE TABLE LINKEDIN.SILVER.JOB_SKILLS AS
+SELECT
+    job_id::INT       AS job_id,
+    skill_abr::STRING AS skill_abr
+FROM LINKEDIN.BRONZE.JOB_SKILLS;
+
+-- Vérification globale
+SHOW TABLES IN SCHEMA LINKEDIN.SILVER;
+```
+
+> **Problème rencontré :** Les colonnes booléennes `remote_allowed`, `sponsored`
+> et `inferred` contenaient des valeurs `1.0`/`0.0` non reconnues par Snowflake.
+> **Solution :** Utilisation d'un `CASE WHEN` pour convertir manuellement ces valeurs.

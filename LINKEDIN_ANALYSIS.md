@@ -156,3 +156,65 @@ SHOW TABLES IN SCHEMA LINKEDIN.BRONZE;
 ```
 
 > Le `SHOW TABLES` confirme la création des 8 tables dans `LINKEDIN.BRONZE`.
+
+## Étape 3 — Chargement des données BRONZE
+
+Utilisation de `COPY INTO` pour charger chaque fichier depuis le stage S3 
+vers les tables BRONZE correspondantes.
+
+```sql
+USE SCHEMA LINKEDIN.BRONZE;
+
+-- Chargement de job_postings.csv
+COPY INTO LINKEDIN.BRONZE.JOB_POSTINGS
+FROM @LINKEDIN.BRONZE.linkedin_stage/job_postings.csv
+FILE_FORMAT = (FORMAT_NAME = 'LINKEDIN.BRONZE.csv_format');
+
+-- Chargement de benefits.csv
+COPY INTO LINKEDIN.BRONZE.BENEFITS
+FROM @LINKEDIN.BRONZE.linkedin_stage/benefits.csv
+FILE_FORMAT = (FORMAT_NAME = 'LINKEDIN.BRONZE.csv_format');
+
+-- Chargement de employee_counts.csv
+COPY INTO LINKEDIN.BRONZE.EMPLOYEE_COUNTS
+FROM @LINKEDIN.BRONZE.linkedin_stage/employee_counts.csv
+FILE_FORMAT = (FORMAT_NAME = 'LINKEDIN.BRONZE.csv_format');
+
+-- Chargement de job_skills.csv
+COPY INTO LINKEDIN.BRONZE.JOB_SKILLS
+FROM @LINKEDIN.BRONZE.linkedin_stage/job_skills.csv
+FILE_FORMAT = (FORMAT_NAME = 'LINKEDIN.BRONZE.csv_format');
+
+-- Chargement de companies.json
+COPY INTO LINKEDIN.BRONZE.COMPANIES
+FROM @LINKEDIN.BRONZE.linkedin_stage/companies.json
+FILE_FORMAT = (FORMAT_NAME = 'LINKEDIN.BRONZE.json_format');
+
+-- Chargement de company_industries.json
+COPY INTO LINKEDIN.BRONZE.COMPANY_INDUSTRIES
+FROM @LINKEDIN.BRONZE.linkedin_stage/company_industries.json
+FILE_FORMAT = (FORMAT_NAME = 'LINKEDIN.BRONZE.json_format');
+
+-- Chargement de company_specialities.json
+COPY INTO LINKEDIN.BRONZE.COMPANY_SPECIALITIES
+FROM @LINKEDIN.BRONZE.linkedin_stage/company_specialities.json
+FILE_FORMAT = (FORMAT_NAME = 'LINKEDIN.BRONZE.json_format');
+
+-- Chargement de job_industries.json
+COPY INTO LINKEDIN.BRONZE.JOB_INDUSTRIES
+FROM @LINKEDIN.BRONZE.linkedin_stage/job_industries.json
+FILE_FORMAT = (FORMAT_NAME = 'LINKEDIN.BRONZE.json_format');
+```
+
+> Résultats du chargement :
+
+| Table | Nombre de lignes |
+|-------|-----------------|
+| `JOB_POSTINGS` | 33 246 |
+| `BENEFITS` | 60 899 |
+| `EMPLOYEE_COUNTS` | 219 806 |
+| `JOB_SKILLS` | 35 409 |
+| `COMPANIES` | 24 306 |
+| `COMPANY_INDUSTRIES` | 27 015 |
+| `COMPANY_SPECIALITIES` | 67 728 |
+| `JOB_INDUSTRIES` | 21 993 |

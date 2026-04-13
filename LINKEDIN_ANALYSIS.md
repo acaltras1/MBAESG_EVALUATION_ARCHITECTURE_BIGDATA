@@ -441,3 +441,133 @@ ORDER BY nb_postings DESC;
 | Internship | 111 | 0.70% |
 | Other | 53 | 0.33% |
 | Volunteer | 8 | 0.05% |
+
+## Étape 6 — Visualisations Streamlit
+
+Création d'un dashboard interactif avec 5 visualisations
+hébergé directement dans Snowflake via Streamlit.
+
+### Problème rencontré
+La colonne `company_name` dans `JOB_POSTINGS` contenait en réalité
+des IDs numériques au format float (`77766802.0`) et non des noms
+d'entreprises. La jointure avec `COMPANIES` nécessitait une conversion
+`::FLOAT::INT` pour correspondre au `company_id`.
+
+```python
+import streamlit as st
+import pandas as pd
+from snowflake.snowpark.context import get_active_session
+
+session = get_active_session()
+
+st.title("🧊 Analyse des Offres d'Emploi LinkedIn")
+st.write("Dashboard interactif basé sur les données LinkedIn — MBA ESG Architecture Big Data")
+
+# Analyse 1 : Top 10 des titres de postes par industrie
+st.header("📊 Analyse 1 — Top 10 des titres de postes par industrie")
+
+industries = session.sql("""
+    SELECT DISTINCT industry 
+    FROM LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY
+    ORDER BY industry
+""").to_pandas()
+
+industry_list = industries["INDUSTRY"].tolist()
+
+selected_industry_1 = st.selectbox(
+    "Sélectionne une industrie :",
+    industry_list,
+    key="industry_1"
+)
+
+data_1 = session.sql(f"""
+    SELECT job_title, nb_postings
+    FROM LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY
+    WHERE industry = '{selected_industry_1}'
+    ORDER BY rank
+""").to_pandas()
+
+data_1.columns = [c.lower() for c in data_1.columns]
+st.bar_chart(data=data_1, x="job_title", y="nb_postings")
+st.subheader("Données brutes")
+st.dataframe(data_1, use_container_width=True)
+
+st.divider()
+
+# Analyse 2 : Top 10 des postes les mieux rémunérés
+st.header("💰 Analyse 2 — Top 10 des postes les mieux rémunérés par industrie")
+
+selected_industry_2 = st.selectbox(
+    "Sélectionne une industrie :",
+    industry_list,
+    key="industry_2"
+)
+
+data_2 = session.sql(f"""
+    SELECT job_title, avg_max_salary, avg_med_salary, avg_min_salary
+    FROM LINKEDIN.GOLD.TOP_SALARIES_BY_INDUSTRY
+    WHERE industry = '{selected_industry_2}'
+    ORDER BY rank
+""").to_pandas()
+
+data_2.columns = [c.lower() for c in data_2.columns]
+st.bar_chart(data=data_2, x="job_title", y="avg_max_salary")
+st.subheader("Données brutes")
+st.dataframe(data_2, use_container_width=True)
+
+st.divider()
+
+# Analyse 3 : Répartition par taille d'entreprise
+st.header("🏢 Analyse 3 — Répartition des offres par taille d'entreprise")
+
+data_3 = session.sql("""
+    SELECT company_size_label, nb_postings
+    FROM LINKEDIN.GOLD.POSTINGS_BY_COMPANY_SIZE
+    ORDER BY company_size_label
+""").to_pandas()
+
+data_3.columns = [c.lower() for c in data_3.columns]
+st.bar_chart(data=data_3, x="company_size_label", y="nb_postings")
+st.subheader("Données brutes")
+st.dataframe(data_3, use_container_width=True)
+
+st.divider()
+
+# Analyse 4 : Répartition par secteur d'activité
+st.header("🏭 Analyse 4 — Top 20 des secteurs d'activité")
+
+data_4 = session.sql("""
+    SELECT industry, nb_postings
+    FROM LINKEDIN.GOLD.POSTINGS_BY_INDUSTRY
+    ORDER BY nb_postings DESC
+""").to_pandas()
+
+data_4.columns = [c.lower() for c in data_4.columns]
+st.bar_chart(data=data_4, x="industry", y="nb_postings")
+st.subheader("Données brutes")
+st.dataframe(data_4, use_container_width=True)
+
+st.divider()
+
+# Analyse 5 : Répartition par type d'emploi
+st.header("⏱️ Analyse 5 — Répartition des offres par type d'emploi")
+
+data_5 = session.sql("""
+    SELECT work_type, nb_postings, percentage
+    FROM LINKEDIN.GOLD.POSTINGS_BY_WORK_TYPE
+""").to_pandas()
+
+data_5.columns = [c.lower() for c in data_5.columns]
+st.bar_chart(data=data_5, x="work_type", y="nb_postings")
+st.subheader("Données brutes")
+st.dataframe(data_5, use_container_width=True)
+```
+
+> **Résultats :** Les 5 analyses sont fonctionnelles et interactives.
+> Les captures d'écran sont disponibles ci-dessous.
+
+![Analyse 1](images/analyse1.png)
+![Analyse 2](images/analyse2.png)
+![Analyse 3](images/analyse3.png)
+![Analyse 4](images/analyse4.png)
+![Analyse 5](images/analyse5.png)

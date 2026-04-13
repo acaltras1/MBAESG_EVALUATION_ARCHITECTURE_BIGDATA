@@ -571,3 +571,94 @@ st.dataframe(data_5, use_container_width=True)
 ![Analyse 3](images/analyse3.png)
 ![Analyse 4](images/analyse4.png)
 ![Analyse 5](images/analyse5.png)
+
+## ⚠️ Problèmes rencontrés et solutions apportées
+
+### Problème 1 — Conversion des colonnes booléennes
+**Étape concernée :** Couche SILVER — Table `JOB_POSTINGS`
+
+**Erreur obtenue :**
+```
+DML operation failed on column REMOTE_ALLOWED with error:
+Boolean value '1.0' is not recognized
+```
+
+**Cause :** Les colonnes `remote_allowed`, `sponsored` et `inferred`
+contenaient des valeurs `1.0` et `0.0` au lieu de `TRUE`/`FALSE`.
+Snowflake ne reconnaît pas ce format pour un cast direct en BOOLEAN.
+
+**Solution :** Remplacement du cast `::BOOLEAN` par un `CASE WHEN` :
+```sql
+CASE
+    WHEN remote_allowed = '1.0' THEN TRUE
+    WHEN remote_allowed = '0.0' THEN FALSE
+    ELSE NULL
+END AS remote_allowed
+```
+
+---
+
+### Problème 2 — Colonnes retournées en majuscules par Snowflake
+**Étape concernée :** Visualisations Streamlit
+
+**Erreur obtenue :**
+```
+StreamlitColumnNotFoundError: Data does not have a column named "JOB_TITLE".
+Available columns are ``
+```
+
+**Cause :** Snowflake retourne tous les noms de colonnes en majuscules
+(`JOB_TITLE`, `NB_POSTINGS`...) alors que Streamlit les cherche
+en minuscules dans `st.bar_chart()`.
+
+**Solution :** Conversion des données en DataFrame pandas avec
+mise en minuscules des colonnes :
+```python
+data = session.sql("SELECT ...").to_pandas()
+data.columns = [c.lower() for c in data.columns]
+```
+
+---
+
+### Problème 3 — Jointure incorrecte entre JOB_POSTINGS et COMPANIES
+**Étape concernée :** Couche GOLD — Analyses 1, 2 et 3
+
+**Symptôme :** Les graphiques des analyses 1, 2 et 3 étaient vides,
+aucune donnée n'était retournée.
+
+**Cause :** La colonne `company_name` dans `JOB_POSTINGS` ne contient
+pas des noms d'entreprises mais des **IDs numériques stockés en float**
+(ex: `77766802.0`). La jointure avec `c.name` retournait donc 0 lignes.
+
+**Diagnostic :**
+```sql
+-- company_name contient des IDs en float, pas des noms
+SELECT DISTINCT company_name
+FROM LINKEDIN.SILVER.JOB_POSTINGS
+LIMIT 5;
+-- Résultat : 3895037.0, 4422.0, 3738912.0...
+
+-- La jointure directe retourne 0 lignes
+SELECT COUNT(*)
+FROM LINKEDIN.SILVER.JOB_POSTINGS jp
+JOIN LINKEDIN.SILVER.COMPANIES c
+    ON jp.company_name = c.name;
+-- Résultat : 0
+```
+
+**Solution :** Conversion de `company_name` en INT pour le faire
+correspondre au `company_id` de la table `COMPANIES` :
+```sql
+JOIN LINKEDIN.SILVER.COMPANIES c
+    ON jp.company_name::FLOAT::INT = c.company_id
+```
+
+---
+
+### Récapitulatif des problèmes
+
+| # | Problème | Étape | Solution |
+|---|----------|-------|----------|
+| 1 | Booléens `1.0`/`0.0` non reconnus | SILVER | `CASE WHEN` |
+| 2 | Colonnes en majuscules dans Streamlit | Streamlit | `.to_pandas()` + `.lower()` |
+| 3 | `company_name` contient des IDs float | GOLD | `::FLOAT::INT` |

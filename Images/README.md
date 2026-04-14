@@ -22,5 +22,5 @@ Ces images sont référencées dans les fichiers suivants :
 ## Syntaxe d'appel
 
 ```markdown
-![Description](Images/analyse1.png)
+![Description](Images/analyse1.png.png)
 ```

@@ -7,7 +7,7 @@ réalisées dans le cadre du projet **Analyse des Offres d'Emploi LinkedIn avec 
 
 | Fichier | Description |
 |---------|-------------|
-| `analyse1.png` | Top 10 des titres de postes les plus publiés par industrie |
+| `analyse1.png.png` | Top 10 des titres de postes les plus publiés par industrie |
 | `analyse2.png` | Top 10 des postes les mieux rémunérés par industrie |
 | `analyse3.png` | Répartition des offres par taille d'entreprise |
 | `analyse4.png` | Répartition des offres par secteur d'activité |

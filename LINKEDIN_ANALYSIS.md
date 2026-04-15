@@ -608,9 +608,12 @@ des IDs numériques au format float (`77766802.0`) et non des noms
 d'entreprises. La jointure avec `COMPANIES` nécessitait une conversion
 `::FLOAT::INT` pour correspondre au `company_id`.
 
+## Étape 6 — Visualisations Streamlit
+
 ```python
 import streamlit as st
 import pandas as pd
+import altair as alt
 from snowflake.snowpark.context import get_active_session
 
 session = get_active_session()
@@ -618,115 +621,251 @@ session = get_active_session()
 st.title("🧊 Analyse des Offres d'Emploi LinkedIn")
 st.write("Dashboard interactif basé sur les données LinkedIn — MBA ESG Architecture Big Data")
 
-# Analyse 1 : Top 10 des titres de postes par industrie
-st.header("📊 Analyse 1 — Top 10 des titres de postes par industrie")
-
+# Analyse 1 : Top 10 titres les plus publiés par industrie
+st.header("📊 Analyse 1 — Top 10 des titres de postes les plus publiés par industrie")
 industries = session.sql("""
-    SELECT DISTINCT industry 
+    SELECT DISTINCT industry
     FROM LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY
     ORDER BY industry
 """).to_pandas()
-
 industry_list = industries["INDUSTRY"].tolist()
-
-selected_industry_1 = st.selectbox(
-    "Sélectionne une industrie :",
-    industry_list,
-    key="industry_1"
-)
-
+selected_industry_1 = st.selectbox("Sélectionne une industrie :", industry_list, key="industry_1")
 data_1 = session.sql(f"""
     SELECT job_title, nb_postings
     FROM LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY
     WHERE industry = '{selected_industry_1}'
-    ORDER BY rank
+    ORDER BY nb_postings DESC
 """).to_pandas()
-
 data_1.columns = [c.lower() for c in data_1.columns]
-st.bar_chart(data=data_1, x="job_title", y="nb_postings")
+bars1 = alt.Chart(data_1).mark_bar().encode(
+    x=alt.X("nb_postings:Q", title="Nombre d'offres publiées"),
+    y=alt.Y("job_title:N", sort="-x", title="Titre du poste"),
+    color=alt.Color("nb_postings:Q", scale=alt.Scale(scheme="blues"), legend=None),
+    tooltip=[alt.Tooltip("job_title:N", title="Poste"), alt.Tooltip("nb_postings:Q", title="Nombre d'offres")]
+).properties(title=f"Top 10 des titres les plus publiés — {selected_industry_1}", height=400)
+text1 = bars1.mark_text(align="left", dx=3, color="white", fontSize=12).encode(text=alt.Text("nb_postings:Q"))
+st.altair_chart((bars1 + text1), use_container_width=True)
 st.subheader("Données brutes")
 st.dataframe(data_1, use_container_width=True)
-
 st.divider()
 
-# Analyse 2 : Top 10 des postes les mieux rémunérés
+# Analyse 2 : Top 10 postes les mieux rémunérés par industrie
 st.header("💰 Analyse 2 — Top 10 des postes les mieux rémunérés par industrie")
-
-selected_industry_2 = st.selectbox(
-    "Sélectionne une industrie :",
-    industry_list,
-    key="industry_2"
-)
-
+selected_industry_2 = st.selectbox("Sélectionne une industrie :", industry_list, key="industry_2")
 data_2 = session.sql(f"""
     SELECT job_title, avg_max_salary, avg_med_salary, avg_min_salary
     FROM LINKEDIN.GOLD.TOP_SALARIES_BY_INDUSTRY
     WHERE industry = '{selected_industry_2}'
-    ORDER BY rank
+    ORDER BY avg_max_salary DESC
 """).to_pandas()
-
 data_2.columns = [c.lower() for c in data_2.columns]
-st.bar_chart(data=data_2, x="job_title", y="avg_max_salary")
+data_2_melted = data_2.melt(
+    id_vars="job_title",
+    value_vars=["avg_min_salary", "avg_med_salary", "avg_max_salary"],
+    var_name="type_salaire",
+    value_name="salaire"
+)
+salary_labels = {"avg_min_salary": "Salaire minimum", "avg_med_salary": "Salaire médian", "avg_max_salary": "Salaire maximum"}
+data_2_melted["type_salaire_label"] = data_2_melted["type_salaire"].map(salary_labels)
+fig2 = alt.Chart(data_2_melted).mark_bar().encode(
+    x=alt.X("job_title:N", title="Titre du poste", axis=alt.Axis(labelAngle=-30)),
+    y=alt.Y("salaire:Q", title="Salaire annuel ($)", axis=alt.Axis(format="$,.0f")),
+    color=alt.Color(
+        "type_salaire_label:N",
+        scale=alt.Scale(
+            domain=["Salaire minimum", "Salaire médian", "Salaire maximum"],
+            range=["#90CAF9", "#1E88E5", "#0D47A1"]
+        ),
+        legend=alt.Legend(title="Type de salaire")
+    ),
+    xOffset="type_salaire_label:N",
+    tooltip=[alt.Tooltip("job_title:N", title="Poste"), alt.Tooltip("type_salaire_label:N", title="Type"), alt.Tooltip("salaire:Q", title="Salaire ($)", format="$,.0f")]
+).properties(title=f"Top 10 des salaires — {selected_industry_2}", height=450)
+st.altair_chart(fig2, use_container_width=True)
 st.subheader("Données brutes")
 st.dataframe(data_2, use_container_width=True)
-
 st.divider()
 
 # Analyse 3 : Répartition par taille d'entreprise
 st.header("🏢 Analyse 3 — Répartition des offres par taille d'entreprise")
-
-data_3 = session.sql("""
-    SELECT company_size_label, nb_postings
-    FROM LINKEDIN.GOLD.POSTINGS_BY_COMPANY_SIZE
-    ORDER BY company_size_label
-""").to_pandas()
-
+data_3 = session.sql("SELECT company_size_label, nb_postings FROM LINKEDIN.GOLD.POSTINGS_BY_COMPANY_SIZE ORDER BY company_size_label").to_pandas()
 data_3.columns = [c.lower() for c in data_3.columns]
-st.bar_chart(data=data_3, x="company_size_label", y="nb_postings")
+data_3["percentage"] = (data_3["nb_postings"] / data_3["nb_postings"].sum() * 100).round(1)
+data_3["label"] = data_3["percentage"].astype(str) + "%"
+bars3 = alt.Chart(data_3).mark_bar().encode(
+    x=alt.X("company_size_label:N", title="Taille d'entreprise", sort=None, axis=alt.Axis(labelAngle=-20)),
+    y=alt.Y("nb_postings:Q", title="Nombre d'offres"),
+    color=alt.Color("company_size_label:N", scale=alt.Scale(scheme="tableau10"), legend=None),
+    tooltip=[alt.Tooltip("company_size_label:N", title="Taille"), alt.Tooltip("nb_postings:Q", title="Offres"), alt.Tooltip("label:N", title="Pourcentage")]
+).properties(title="Répartition des offres par taille d'entreprise", height=400)
+text3 = bars3.mark_text(align="center", dy=-10, color="white", fontSize=12, fontWeight="bold").encode(text=alt.Text("label:N"))
+st.altair_chart((bars3 + text3), use_container_width=True)
 st.subheader("Données brutes")
 st.dataframe(data_3, use_container_width=True)
-
 st.divider()
 
 # Analyse 4 : Répartition par secteur d'activité
-st.header("🏭 Analyse 4 — Top 20 des secteurs d'activité")
-
-data_4 = session.sql("""
-    SELECT industry, nb_postings
-    FROM LINKEDIN.GOLD.POSTINGS_BY_INDUSTRY
-    ORDER BY nb_postings DESC
-""").to_pandas()
-
+st.header("🏭 Analyse 4 — Répartition des offres par secteur d'activité")
+data_4 = session.sql("SELECT industry, nb_postings FROM LINKEDIN.GOLD.POSTINGS_BY_INDUSTRY ORDER BY nb_postings DESC").to_pandas()
 data_4.columns = [c.lower() for c in data_4.columns]
-st.bar_chart(data=data_4, x="industry", y="nb_postings")
+data_4["percentage"] = (data_4["nb_postings"] / data_4["nb_postings"].sum() * 100).round(1)
+data_4["label"] = data_4["percentage"].astype(str) + "%"
+bars4 = alt.Chart(data_4).mark_bar().encode(
+    x=alt.X("nb_postings:Q", title="Nombre d'offres"),
+    y=alt.Y("industry:N", sort="-x", title="Secteur d'activité"),
+    color=alt.Color("nb_postings:Q", scale=alt.Scale(scheme="tealblues"), legend=None),
+    tooltip=[alt.Tooltip("industry:N", title="Secteur"), alt.Tooltip("nb_postings:Q", title="Offres"), alt.Tooltip("label:N", title="Pourcentage")]
+).properties(title="Top 20 des secteurs d'activité les plus représentés", height=500)
+text4 = bars4.mark_text(align="left", dx=3, color="white", fontSize=11).encode(text=alt.Text("label:N"))
+st.altair_chart((bars4 + text4), use_container_width=True)
 st.subheader("Données brutes")
 st.dataframe(data_4, use_container_width=True)
-
 st.divider()
 
 # Analyse 5 : Répartition par type d'emploi
 st.header("⏱️ Analyse 5 — Répartition des offres par type d'emploi")
-
-data_5 = session.sql("""
-    SELECT work_type, nb_postings, percentage
-    FROM LINKEDIN.GOLD.POSTINGS_BY_WORK_TYPE
-""").to_pandas()
-
+data_5 = session.sql("SELECT work_type, nb_postings, percentage FROM LINKEDIN.GOLD.POSTINGS_BY_WORK_TYPE").to_pandas()
 data_5.columns = [c.lower() for c in data_5.columns]
-st.bar_chart(data=data_5, x="work_type", y="nb_postings")
+data_5["label"] = data_5["percentage"].astype(str) + "%"
+bars5 = alt.Chart(data_5).mark_bar().encode(
+    x=alt.X("nb_postings:Q", title="Nombre d'offres"),
+    y=alt.Y("work_type:N", sort="-x", title="Type d'emploi"),
+    color=alt.Color("work_type:N", scale=alt.Scale(scheme="set2"), legend=None),
+    tooltip=[alt.Tooltip("work_type:N", title="Type d'emploi"), alt.Tooltip("nb_postings:Q", title="Offres"), alt.Tooltip("label:N", title="Pourcentage")]
+).properties(title="Répartition des offres par type d'emploi", height=350)
+text5 = bars5.mark_text(align="left", dx=3, color="white", fontSize=12, fontWeight="bold").encode(text=alt.Text("label:N"))
+st.altair_chart((bars5 + text5), use_container_width=True)
 st.subheader("Données brutes")
 st.dataframe(data_5, use_container_width=True)
+st.divider()
+
+# Analyse 6 : Top 10 entreprises qui recrutent le plus
+st.header("🏆 Analyse 6 — Top 10 des entreprises qui recrutent le plus")
+data_6 = session.sql("SELECT company_name, nb_postings, company_size_label FROM LINKEDIN.GOLD.TOP_RECRUITING_COMPANIES ORDER BY nb_postings DESC").to_pandas()
+data_6.columns = [c.lower() for c in data_6.columns]
+bars6 = alt.Chart(data_6).mark_bar().encode(
+    x=alt.X("nb_postings:Q", title="Nombre d'offres"),
+    y=alt.Y("company_name:N", sort="-x", title="Entreprise"),
+    color=alt.Color("nb_postings:Q", scale=alt.Scale(scheme="oranges"), legend=None),
+    tooltip=[alt.Tooltip("company_name:N", title="Entreprise"), alt.Tooltip("nb_postings:Q", title="Offres"), alt.Tooltip("company_size_label:N", title="Taille")]
+).properties(title="Top 10 des entreprises qui recrutent le plus", height=400)
+text6 = bars6.mark_text(align="left", dx=3, color="white", fontSize=12, fontWeight="bold").encode(text=alt.Text("nb_postings:Q"))
+st.altair_chart((bars6 + text6), use_container_width=True)
+st.subheader("Données brutes")
+st.dataframe(data_6, use_container_width=True)
+st.divider()
+
+# Analyse 7 : Répartition par niveau d'expérience
+st.header("🎓 Analyse 7 — Répartition des offres par niveau d'expérience")
+data_7 = session.sql("SELECT experience_level, nb_postings, percentage FROM LINKEDIN.GOLD.POSTINGS_BY_EXPERIENCE").to_pandas()
+data_7.columns = [c.lower() for c in data_7.columns]
+data_7["label"] = data_7["percentage"].astype(str) + "%"
+bars7 = alt.Chart(data_7).mark_bar().encode(
+    x=alt.X("nb_postings:Q", title="Nombre d'offres"),
+    y=alt.Y("experience_level:N", sort="-x", title="Niveau d'expérience"),
+    color=alt.Color("experience_level:N", scale=alt.Scale(scheme="purples"), legend=None),
+    tooltip=[alt.Tooltip("experience_level:N", title="Niveau"), alt.Tooltip("nb_postings:Q", title="Offres"), alt.Tooltip("label:N", title="Pourcentage")]
+).properties(title="Répartition des offres par niveau d'expérience", height=400)
+text7 = bars7.mark_text(align="left", dx=3, color="white", fontSize=12, fontWeight="bold").encode(text=alt.Text("label:N"))
+st.altair_chart((bars7 + text7), use_container_width=True)
+st.subheader("Données brutes")
+st.dataframe(data_7, use_container_width=True)
+st.divider()
+
+# Analyse 8 : Remote vs Présentiel
+st.header("🌍 Analyse 8 — Répartition Remote vs Présentiel")
+data_8 = session.sql("SELECT remote_label, nb_postings, percentage FROM LINKEDIN.GOLD.POSTINGS_BY_REMOTE ORDER BY nb_postings DESC").to_pandas()
+data_8.columns = [c.lower() for c in data_8.columns]
+data_8["label"] = data_8["percentage"].astype(str) + "%"
+bars8 = alt.Chart(data_8).mark_bar().encode(
+    x=alt.X("nb_postings:Q", title="Nombre d'offres"),
+    y=alt.Y("remote_label:N", sort="-x", title="Mode de travail"),
+    color=alt.Color(
+        "remote_label:N",
+        scale=alt.Scale(
+            domain=["Remote", "Présentiel", "Non renseigné"],
+            range=["#1E88E5", "#FF8F00", "#9E9E9E"]
+        ),
+        legend=None
+    ),
+    tooltip=[alt.Tooltip("remote_label:N", title="Mode"), alt.Tooltip("nb_postings:Q", title="Offres"), alt.Tooltip("label:N", title="Pourcentage")]
+).properties(title="Répartition Remote vs Présentiel", height=250)
+text8 = bars8.mark_text(align="left", dx=3, color="white", fontSize=13, fontWeight="bold").encode(text=alt.Text("label:N"))
+st.altair_chart((bars8 + text8), use_container_width=True)
+col1, col2, col3 = st.columns(3)
+for i, row in data_8.iterrows():
+    if row["remote_label"] == "Remote":
+        col1.metric("Offres Remote", int(row["nb_postings"]), row["label"])
+    elif row["remote_label"] == "Présentiel":
+        col2.metric("Offres Présentiel", int(row["nb_postings"]), row["label"])
+    else:
+        col3.metric("Non renseigné", int(row["nb_postings"]), row["label"])
+st.subheader("Données brutes")
+st.dataframe(data_8, use_container_width=True)
+st.divider()
+
+# Analyse 9 : Top 10 localisations
+st.header("📍 Analyse 9 — Top 10 des localisations avec le plus d'offres")
+data_9 = session.sql("SELECT location, nb_postings, percentage FROM LINKEDIN.GOLD.TOP_LOCATIONS ORDER BY nb_postings DESC").to_pandas()
+data_9.columns = [c.lower() for c in data_9.columns]
+data_9["label"] = data_9["percentage"].astype(str) + "%"
+bars9 = alt.Chart(data_9).mark_bar().encode(
+    x=alt.X("nb_postings:Q", title="Nombre d'offres"),
+    y=alt.Y("location:N", sort="-x", title="Localisation"),
+    color=alt.Color("nb_postings:Q", scale=alt.Scale(scheme="greens"), legend=None),
+    tooltip=[alt.Tooltip("location:N", title="Localisation"), alt.Tooltip("nb_postings:Q", title="Offres"), alt.Tooltip("label:N", title="Pourcentage")]
+).properties(title="Top 10 des localisations avec le plus d'offres", height=400)
+text9 = bars9.mark_text(align="left", dx=3, color="white", fontSize=12, fontWeight="bold").encode(text=alt.Text("label:N"))
+st.altair_chart((bars9 + text9), use_container_width=True)
+st.subheader("Données brutes")
+st.dataframe(data_9, use_container_width=True)
+st.divider()
+
+# Analyse 10 : Salaire moyen par type de contrat
+st.header("💵 Analyse 10 — Salaire moyen par type de contrat")
+data_10 = session.sql("SELECT work_type, avg_max_salary, avg_med_salary, avg_min_salary, nb_postings FROM LINKEDIN.GOLD.AVG_SALARY_BY_WORK_TYPE ORDER BY avg_max_salary DESC").to_pandas()
+data_10.columns = [c.lower() for c in data_10.columns]
+data_10_melted = data_10.melt(
+    id_vars="work_type",
+    value_vars=["avg_min_salary", "avg_med_salary", "avg_max_salary"],
+    var_name="type_salaire",
+    value_name="salaire"
+)
+salary_labels_10 = {"avg_min_salary": "Salaire minimum", "avg_med_salary": "Salaire médian", "avg_max_salary": "Salaire maximum"}
+data_10_melted["type_salaire_label"] = data_10_melted["type_salaire"].map(salary_labels_10)
+data_10_melted = data_10_melted.dropna(subset=["salaire"])
+fig10 = alt.Chart(data_10_melted).mark_bar().encode(
+    x=alt.X("work_type:N", title="Type de contrat", axis=alt.Axis(labelAngle=-20)),
+    y=alt.Y("salaire:Q", title="Salaire moyen ($)", axis=alt.Axis(format="$,.0f")),
+    color=alt.Color(
+        "type_salaire_label:N",
+        scale=alt.Scale(
+            domain=["Salaire minimum", "Salaire médian", "Salaire maximum"],
+            range=["#A5D6A7", "#43A047", "#1B5E20"]
+        ),
+        legend=alt.Legend(title="Type de salaire")
+    ),
+    xOffset="type_salaire_label:N",
+    tooltip=[alt.Tooltip("work_type:N", title="Type de contrat"), alt.Tooltip("type_salaire_label:N", title="Type"), alt.Tooltip("salaire:Q", title="Salaire ($)", format="$,.0f")]
+).properties(title="Salaire moyen par type de contrat", height=400)
+st.altair_chart(fig10, use_container_width=True)
+st.subheader("Données brutes")
+st.dataframe(data_10, use_container_width=True)
 ```
 
 > **Résultats :** Les 5 analyses sont fonctionnelles et interactives.
-> Les captures d'écran sont disponibles ci-dessous.
+> Les captures d'écran de chaque analyse sont disponibles dans le dossier `Images/`
 
-![Analyse 1](images/analyse1.png)
-![Analyse 2](images/analyse2.png)
-![Analyse 3](images/analyse3.png)
-![Analyse 4](images/analyse4.png)
-![Analyse 5](images/analyse5.png)
-
+![Analyse 1](Images/analyse1.png)
+![Analyse 2](Images/analyse2.png)
+![Analyse 3](Images/analyse3.png)
+![Analyse 4](Images/analyse4.png)
+![Analyse 5](Images/analyse5.png)
+![Analyse 6](Images/analyse6.png)
+![Analyse 7](Images/analyse7.png)
+![Analyse 8](Images/analyse8.png)
+![Analyse 9](Images/analyse9.png)
+![Analyse 10](Images/analyse10.png)
 ## ⚠️ Problèmes rencontrés et solutions apportées
 
 ### Problème 1 — Conversion des colonnes booléennes

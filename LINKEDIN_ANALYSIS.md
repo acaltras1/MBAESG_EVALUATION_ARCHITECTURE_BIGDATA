@@ -345,7 +345,10 @@ SHOW TABLES IN SCHEMA LINKEDIN.SILVER;
 Les 5 analyses sont créées sous forme de vues dans la couche GOLD,
 prêtes à être consommées par Streamlit.
 
+
 USE SCHEMA LINKEDIN.GOLD;
+``
+
 
 -- ANALYSE 1 : Top 10 des titres de postes par industrie
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY AS

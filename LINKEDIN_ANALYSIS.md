@@ -342,15 +342,31 @@ SHOW TABLES IN SCHEMA LINKEDIN.SILVER;
 
 ## Étape 5 — Couche GOLD (Analyses)
 
-Les 5 analyses sont créées sous forme de vues dans la couche GOLD,
+Les 10 analyses sont créées sous forme de vues dans la couche GOLD,
 prêtes à être consommées par Streamlit.
 
+### Description des vues GOLD
 
-USE SCHEMA LINKEDIN.GOLD;
-``
+| Vue | Description |
+|-----|-------------|
+| `TOP_TITLES_BY_INDUSTRY` | Top 10 des titres de postes les plus publiés par industrie |
+| `TOP_SALARIES_BY_INDUSTRY` | Top 10 des postes les mieux rémunérés par industrie |
+| `POSTINGS_BY_COMPANY_SIZE` | Répartition des offres par taille d'entreprise |
+| `POSTINGS_BY_INDUSTRY` | Répartition des offres par secteur d'activité |
+| `POSTINGS_BY_WORK_TYPE` | Répartition des offres par type d'emploi |
+| `TOP_RECRUITING_COMPANIES` | Top 10 des entreprises qui recrutent le plus |
+| `POSTINGS_BY_EXPERIENCE` | Répartition des offres par niveau d'expérience |
+| `POSTINGS_BY_REMOTE` | Répartition Remote vs Présentiel |
+| `TOP_LOCATIONS` | Top 10 des localisations avec le plus d'offres |
+| `AVG_SALARY_BY_WORK_TYPE` | Salaire moyen par type de contrat |
 
+---
 
--- ANALYSE 1 : Top 10 des titres de postes par industrie
+### Analyse 1 — Top 10 des titres de postes les plus publiés par industrie
+Jointure entre `JOB_POSTINGS`, `COMPANIES` et `COMPANY_INDUSTRIES`.
+Utilisation de `ROW_NUMBER()` pour classer les titres par industrie.
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY AS
 SELECT
     ci.industry                     AS industry,
@@ -367,13 +383,15 @@ JOIN LINKEDIN.SILVER.COMPANY_INDUSTRIES ci
     ON c.company_id = ci.company_id
 GROUP BY ci.industry, jp.title
 QUALIFY rank <= 10;
+```
 
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY
-ORDER BY industry, rank
-LIMIT 20;
+---
 
--- ANALYSE 2 : Top 10 des postes les mieux rémunérés
+### Analyse 2 — Top 10 des postes les mieux rémunérés par industrie
+Le salaire médian étant absent des données sources, il est calculé
+comme la moyenne entre le salaire minimum et maximum.
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_SALARIES_BY_INDUSTRY AS
 SELECT
     ci.industry                                         AS industry,
@@ -395,10 +413,15 @@ WHERE jp.max_salary IS NOT NULL
 AND jp.min_salary IS NOT NULL
 GROUP BY ci.industry, jp.title
 QUALIFY rank <= 10;
+```
 
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.TOP_SALARIES_BY_INDUSTRY;
--- ANALYSE 3 : Répartition par taille d'entreprise
+---
+
+### Analyse 3 — Répartition des offres par taille d'entreprise
+La colonne `company_size` contient des valeurs de 0 à 7.
+Un `CASE WHEN` permet de les convertir en labels lisibles.
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_COMPANY_SIZE AS
 SELECT
     CASE c.company_size
@@ -418,11 +441,15 @@ JOIN LINKEDIN.SILVER.COMPANIES c
     ON jp.company_name::FLOAT::INT = c.company_id
 GROUP BY c.company_size
 ORDER BY c.company_size;
+```
 
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_COMPANY_SIZE;
+---
 
--- ANALYSE 4 : Répartition par secteur d'activité
+### Analyse 4 — Répartition des offres par secteur d'activité
+Jointure entre `JOB_POSTINGS` et `JOB_INDUSTRIES`.
+Limite aux 20 secteurs les plus représentés.
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_INDUSTRY AS
 SELECT
     ji.industry_id::STRING          AS industry,
@@ -433,11 +460,15 @@ JOIN LINKEDIN.SILVER.JOB_INDUSTRIES ji
 GROUP BY ji.industry_id
 ORDER BY nb_postings DESC
 LIMIT 20;
+```
 
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_INDUSTRY;
+---
 
--- ANALYSE 5 : Répartition par type d'emploi
+### Analyse 5 — Répartition des offres par type d'emploi
+Utilisation de la fonction fenêtre `SUM() OVER()` pour calculer
+les pourcentages par rapport au total des offres.
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_WORK_TYPE AS
 SELECT
     work_type                       AS work_type,
@@ -448,16 +479,17 @@ FROM LINKEDIN.SILVER.JOB_POSTINGS
 WHERE work_type IS NOT NULL
 GROUP BY work_type
 ORDER BY nb_postings DESC;
+```
 
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_WORK_TYPE;
--- ============================================================
--- ANALYSE 6 : Top 10 des entreprises qui recrutent le plus
--- ============================================================
+---
+
+### Analyse 6 — Top 10 des entreprises qui recrutent le plus
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_RECRUITING_COMPANIES AS
 SELECT
-    c.name                              AS company_name,
-    COUNT(*)                            AS nb_postings,
+    c.name                          AS company_name,
+    COUNT(*)                        AS nb_postings,
     CASE c.company_size
         WHEN 0 THEN 'Très petite (1-10)'
         WHEN 1 THEN 'Petite (11-50)'
@@ -468,92 +500,91 @@ SELECT
         WHEN 6 THEN 'Très grande (5001-10000)'
         WHEN 7 THEN 'Entreprise (10000+)'
         ELSE 'Non renseigné'
-    END                                 AS company_size_label
+    END                             AS company_size_label
 FROM LINKEDIN.SILVER.JOB_POSTINGS jp
 JOIN LINKEDIN.SILVER.COMPANIES c
     ON jp.company_name::FLOAT::INT = c.company_id
 GROUP BY c.name, c.company_size
 ORDER BY nb_postings DESC
 LIMIT 10;
+```
 
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.TOP_RECRUITING_COMPANIES;
+---
 
--- ============================================================
--- ANALYSE 7 : Répartition des offres par niveau d'expérience
--- ============================================================
+### Analyse 7 — Répartition des offres par niveau d'expérience
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_EXPERIENCE AS
 SELECT
-    experience_level                    AS experience_level,
-    COUNT(*)                            AS nb_postings,
+    experience_level                AS experience_level,
+    COUNT(*)                        AS nb_postings,
     ROUND(COUNT(*) * 100.0 /
-        SUM(COUNT(*)) OVER (), 2)       AS percentage
+        SUM(COUNT(*)) OVER (), 2)   AS percentage
 FROM LINKEDIN.SILVER.JOB_POSTINGS
 WHERE experience_level IS NOT NULL
 GROUP BY experience_level
 ORDER BY nb_postings DESC;
+```
 
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_EXPERIENCE;
+---
 
--- ============================================================
--- ANALYSE 8 : Répartition Remote vs Présentiel
--- ============================================================
+### Analyse 8 — Répartition Remote vs Présentiel
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_REMOTE AS
 SELECT
     CASE
         WHEN remote_allowed = TRUE THEN 'Remote'
         ELSE 'Présentiel'
-    END                                 AS remote_label,
-    COUNT(*)                            AS nb_postings,
+    END                             AS remote_label,
+    COUNT(*)                        AS nb_postings,
     ROUND(COUNT(*) * 100.0 /
-        SUM(COUNT(*)) OVER (), 2)       AS percentage
+        SUM(COUNT(*)) OVER (), 2)   AS percentage
 FROM LINKEDIN.SILVER.JOB_POSTINGS
 WHERE remote_allowed IS NOT NULL
 GROUP BY remote_allowed
 ORDER BY nb_postings DESC;
+```
 
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_REMOTE;
+---
 
--- ============================================================
--- ANALYSE 9 : Top 10 des localisations avec le plus d'offres
--- ============================================================
+### Analyse 9 — Top 10 des localisations avec le plus d'offres
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_LOCATIONS AS
 SELECT
-    location                            AS location,
-    COUNT(*)                            AS nb_postings,
+    location                        AS location,
+    COUNT(*)                        AS nb_postings,
     ROUND(COUNT(*) * 100.0 /
-        SUM(COUNT(*)) OVER (), 2)       AS percentage
+        SUM(COUNT(*)) OVER (), 2)   AS percentage
 FROM LINKEDIN.SILVER.JOB_POSTINGS
 WHERE location IS NOT NULL
 GROUP BY location
 ORDER BY nb_postings DESC
 LIMIT 10;
+```
 
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.TOP_LOCATIONS;
+---
 
--- ============================================================
--- ANALYSE 10 : Salaire moyen par type de contrat
--- ============================================================
+### Analyse 10 — Salaire moyen par type de contrat
+Le salaire médian est calculé comme la moyenne entre min et max
+car le champ `med_salary` est absent des données sources.
+
+```sql
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.AVG_SALARY_BY_WORK_TYPE AS
 SELECT
-    work_type                                           AS work_type,
-    ROUND(AVG(max_salary), 2)                           AS avg_max_salary,
-    ROUND(AVG((max_salary + min_salary) / 2), 2)        AS avg_med_salary,
-    ROUND(AVG(min_salary), 2)                           AS avg_min_salary,
-    COUNT(*)                                            AS nb_postings
+    work_type                                       AS work_type,
+    ROUND(AVG(max_salary), 2)                       AS avg_max_salary,
+    ROUND(AVG((max_salary + min_salary) / 2), 2)    AS avg_med_salary,
+    ROUND(AVG(min_salary), 2)                       AS avg_min_salary,
+    COUNT(*)                                        AS nb_postings
 FROM LINKEDIN.SILVER.JOB_POSTINGS
 WHERE max_salary IS NOT NULL
 AND min_salary IS NOT NULL
 AND work_type IS NOT NULL
 GROUP BY work_type
 ORDER BY avg_max_salary DESC;
-
--- Vérification
-SELECT * FROM LINKEDIN.GOLD.AVG_SALARY_BY_WORK_TYPE;
-
+```
 > Résultats de l'analyse 5 — Répartition par type d'emploi :
 
 | Type d'emploi | Nombre d'offres | Pourcentage |

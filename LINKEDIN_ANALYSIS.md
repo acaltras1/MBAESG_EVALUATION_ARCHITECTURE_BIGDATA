@@ -345,46 +345,57 @@ SHOW TABLES IN SCHEMA LINKEDIN.SILVER;
 Les 5 analyses sont créées sous forme de vues dans la couche GOLD,
 prêtes à être consommées par Streamlit.
 
-```sql
 USE SCHEMA LINKEDIN.GOLD;
 
--- Analyse 1 : Top 10 des titres de postes par industrie
+-- ANALYSE 1 : Top 10 des titres de postes par industrie
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY AS
 SELECT
-    ci.industry                      AS industry,
-    jp.title                         AS job_title,
-    COUNT(*)                         AS nb_postings,
+    ci.industry                     AS industry,
+    jp.title                        AS job_title,
+    COUNT(*)                        AS nb_postings,
     ROW_NUMBER() OVER (
         PARTITION BY ci.industry
         ORDER BY COUNT(*) DESC
-    )                                AS rank
+    )                               AS rank
 FROM LINKEDIN.SILVER.JOB_POSTINGS jp
+JOIN LINKEDIN.SILVER.COMPANIES c
+    ON jp.company_name::FLOAT::INT = c.company_id
 JOIN LINKEDIN.SILVER.COMPANY_INDUSTRIES ci
-    ON jp.company_name = ci.company_id::STRING
+    ON c.company_id = ci.company_id
 GROUP BY ci.industry, jp.title
 QUALIFY rank <= 10;
 
--- Analyse 2 : Top 10 des postes les mieux rémunérés par industrie
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY
+ORDER BY industry, rank
+LIMIT 20;
+
+-- ANALYSE 2 : Top 10 des postes les mieux rémunérés
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_SALARIES_BY_INDUSTRY AS
 SELECT
-    ci.industry                      AS industry,
-    jp.title                         AS job_title,
-    ROUND(AVG(jp.max_salary), 2)     AS avg_max_salary,
-    ROUND(AVG(jp.med_salary), 2)     AS avg_med_salary,
-    ROUND(AVG(jp.min_salary), 2)     AS avg_min_salary,
-    COUNT(*)                         AS nb_postings,
+    ci.industry                                         AS industry,
+    jp.title                                            AS job_title,
+    ROUND(AVG(jp.max_salary), 2)                        AS avg_max_salary,
+    ROUND(AVG((jp.max_salary + jp.min_salary) / 2), 2)  AS avg_med_salary,
+    ROUND(AVG(jp.min_salary), 2)                        AS avg_min_salary,
+    COUNT(*)                                            AS nb_postings,
     ROW_NUMBER() OVER (
         PARTITION BY ci.industry
         ORDER BY AVG(jp.max_salary) DESC
-    )                                AS rank
+    )                                                   AS rank
 FROM LINKEDIN.SILVER.JOB_POSTINGS jp
+JOIN LINKEDIN.SILVER.COMPANIES c
+    ON jp.company_name::FLOAT::INT = c.company_id
 JOIN LINKEDIN.SILVER.COMPANY_INDUSTRIES ci
-    ON jp.company_name = ci.company_id::STRING
+    ON c.company_id = ci.company_id
 WHERE jp.max_salary IS NOT NULL
+AND jp.min_salary IS NOT NULL
 GROUP BY ci.industry, jp.title
 QUALIFY rank <= 10;
 
--- Analyse 3 : Répartition des offres par taille d'entreprise
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.TOP_SALARIES_BY_INDUSTRY;
+-- ANALYSE 3 : Répartition par taille d'entreprise
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_COMPANY_SIZE AS
 SELECT
     CASE c.company_size
@@ -397,19 +408,22 @@ SELECT
         WHEN 6 THEN '6 - Très grande (5001-10000)'
         WHEN 7 THEN '7 - Entreprise (10000+)'
         ELSE 'Non renseigné'
-    END                              AS company_size_label,
-    COUNT(*)                         AS nb_postings
+    END                             AS company_size_label,
+    COUNT(*)                        AS nb_postings
 FROM LINKEDIN.SILVER.JOB_POSTINGS jp
 JOIN LINKEDIN.SILVER.COMPANIES c
-    ON jp.company_name = c.name
+    ON jp.company_name::FLOAT::INT = c.company_id
 GROUP BY c.company_size
 ORDER BY c.company_size;
 
--- Analyse 4 : Répartition des offres par secteur d'activité
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_COMPANY_SIZE;
+
+-- ANALYSE 4 : Répartition par secteur d'activité
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_INDUSTRY AS
 SELECT
-    ji.industry_id::STRING           AS industry,
-    COUNT(*)                         AS nb_postings
+    ji.industry_id::STRING          AS industry,
+    COUNT(*)                        AS nb_postings
 FROM LINKEDIN.SILVER.JOB_POSTINGS jp
 JOIN LINKEDIN.SILVER.JOB_INDUSTRIES ji
     ON jp.job_id = ji.job_id
@@ -417,18 +431,125 @@ GROUP BY ji.industry_id
 ORDER BY nb_postings DESC
 LIMIT 20;
 
--- Analyse 5 : Répartition des offres par type d'emploi
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_INDUSTRY;
+
+-- ANALYSE 5 : Répartition par type d'emploi
 CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_WORK_TYPE AS
 SELECT
-    work_type                        AS work_type,
-    COUNT(*)                         AS nb_postings,
+    work_type                       AS work_type,
+    COUNT(*)                        AS nb_postings,
     ROUND(COUNT(*) * 100.0 /
-        SUM(COUNT(*)) OVER (), 2)    AS percentage
+        SUM(COUNT(*)) OVER (), 2)   AS percentage
 FROM LINKEDIN.SILVER.JOB_POSTINGS
 WHERE work_type IS NOT NULL
 GROUP BY work_type
 ORDER BY nb_postings DESC;
-```
+
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_WORK_TYPE;
+-- ============================================================
+-- ANALYSE 6 : Top 10 des entreprises qui recrutent le plus
+-- ============================================================
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_RECRUITING_COMPANIES AS
+SELECT
+    c.name                              AS company_name,
+    COUNT(*)                            AS nb_postings,
+    CASE c.company_size
+        WHEN 0 THEN 'Très petite (1-10)'
+        WHEN 1 THEN 'Petite (11-50)'
+        WHEN 2 THEN 'Moyenne (51-200)'
+        WHEN 3 THEN 'Intermédiaire (201-500)'
+        WHEN 4 THEN 'Grande (501-1000)'
+        WHEN 5 THEN 'Très grande (1001-5000)'
+        WHEN 6 THEN 'Très grande (5001-10000)'
+        WHEN 7 THEN 'Entreprise (10000+)'
+        ELSE 'Non renseigné'
+    END                                 AS company_size_label
+FROM LINKEDIN.SILVER.JOB_POSTINGS jp
+JOIN LINKEDIN.SILVER.COMPANIES c
+    ON jp.company_name::FLOAT::INT = c.company_id
+GROUP BY c.name, c.company_size
+ORDER BY nb_postings DESC
+LIMIT 10;
+
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.TOP_RECRUITING_COMPANIES;
+
+-- ============================================================
+-- ANALYSE 7 : Répartition des offres par niveau d'expérience
+-- ============================================================
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_EXPERIENCE AS
+SELECT
+    experience_level                    AS experience_level,
+    COUNT(*)                            AS nb_postings,
+    ROUND(COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (), 2)       AS percentage
+FROM LINKEDIN.SILVER.JOB_POSTINGS
+WHERE experience_level IS NOT NULL
+GROUP BY experience_level
+ORDER BY nb_postings DESC;
+
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_EXPERIENCE;
+
+-- ============================================================
+-- ANALYSE 8 : Répartition Remote vs Présentiel
+-- ============================================================
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_REMOTE AS
+SELECT
+    CASE
+        WHEN remote_allowed = TRUE THEN 'Remote'
+        ELSE 'Présentiel'
+    END                                 AS remote_label,
+    COUNT(*)                            AS nb_postings,
+    ROUND(COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (), 2)       AS percentage
+FROM LINKEDIN.SILVER.JOB_POSTINGS
+WHERE remote_allowed IS NOT NULL
+GROUP BY remote_allowed
+ORDER BY nb_postings DESC;
+
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.POSTINGS_BY_REMOTE;
+
+-- ============================================================
+-- ANALYSE 9 : Top 10 des localisations avec le plus d'offres
+-- ============================================================
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_LOCATIONS AS
+SELECT
+    location                            AS location,
+    COUNT(*)                            AS nb_postings,
+    ROUND(COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (), 2)       AS percentage
+FROM LINKEDIN.SILVER.JOB_POSTINGS
+WHERE location IS NOT NULL
+GROUP BY location
+ORDER BY nb_postings DESC
+LIMIT 10;
+
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.TOP_LOCATIONS;
+
+-- ============================================================
+-- ANALYSE 10 : Salaire moyen par type de contrat
+-- ============================================================
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.AVG_SALARY_BY_WORK_TYPE AS
+SELECT
+    work_type                                           AS work_type,
+    ROUND(AVG(max_salary), 2)                           AS avg_max_salary,
+    ROUND(AVG((max_salary + min_salary) / 2), 2)        AS avg_med_salary,
+    ROUND(AVG(min_salary), 2)                           AS avg_min_salary,
+    COUNT(*)                                            AS nb_postings
+FROM LINKEDIN.SILVER.JOB_POSTINGS
+WHERE max_salary IS NOT NULL
+AND min_salary IS NOT NULL
+AND work_type IS NOT NULL
+GROUP BY work_type
+ORDER BY avg_max_salary DESC;
+
+-- Vérification
+SELECT * FROM LINKEDIN.GOLD.AVG_SALARY_BY_WORK_TYPE;
 
 > Résultats de l'analyse 5 — Répartition par type d'emploi :
 

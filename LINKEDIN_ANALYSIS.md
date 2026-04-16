@@ -599,16 +599,35 @@ ORDER BY avg_max_salary DESC;
 
 ## Étape 6 — Visualisations Streamlit
 
-Création d'un dashboard interactif avec 5 visualisations
+Création d'un dashboard interactif avec 10 visualisations
 hébergé directement dans Snowflake via Streamlit.
 
-### Problème rencontré
-La colonne `company_name` dans `JOB_POSTINGS` contenait en réalité
-des IDs numériques au format float (`77766802.0`) et non des noms
-d'entreprises. La jointure avec `COMPANIES` nécessitait une conversion
-`::FLOAT::INT` pour correspondre au `company_id`.
+### Stack de visualisation
 
-## Étape 6 — Visualisations Streamlit
+| Bibliothèque | Rôle |
+|-------------|------|
+| `streamlit` | Framework du dashboard |
+| `altair` | Graphiques interactifs |
+| `pandas` | Manipulation des données |
+
+### Choix des graphiques
+
+| # | Analyse | Graphique | Justification |
+|---|---------|-----------|---------------|
+| 1 | Top 10 titres par industrie | Barres horizontales bleues | Comparaison de noms longs |
+| 2 | Top 10 salaires par industrie | Barres groupées | Comparer min/médian/max |
+| 3 | Taille d'entreprise | Barres verticales | Données ordonnées 0 à 7 |
+| 4 | Secteur d'activité | Barres horizontales teal | Beaucoup de catégories |
+| 5 | Type d'emploi | Barres horizontales | Comparaison avec pourcentages |
+| 6 | Top entreprises | Barres horizontales oranges | Classement clair |
+| 7 | Niveau d'expérience | Barres horizontales violettes | Comparaison ordonnée |
+| 8 | Remote vs Présentiel | Barres + métriques | Vue synthétique |
+| 9 | Localisations | Barres horizontales vertes | Classement géographique |
+| 10 | Salaire par contrat | Barres groupées vertes | Comparer min/médian/max |
+
+---
+
+### Code complet Streamlit
 
 ```python
 import streamlit as st
@@ -853,22 +872,51 @@ st.subheader("Données brutes")
 st.dataframe(data_10, use_container_width=True)
 ```
 
-> **Résultats :** Les 5 analyses sont fonctionnelles et interactives.
-> Les captures d'écran de chaque analyse sont disponibles dans le dossier `Images/`
+---
 
+## 📸 Captures des visualisations Streamlit
+
+### Analyse 1 — Top 10 des titres de postes les plus publiés par industrie
 ![Analyse 1](Images/analyse1.png)
+
+### Analyse 2 — Top 10 des postes les mieux rémunérés par industrie
 ![Analyse 2](Images/analyse2.png)
+
+### Analyse 3 — Répartition des offres par taille d'entreprise
 ![Analyse 3](Images/analyse3.png)
+
+### Analyse 4 — Répartition des offres par secteur d'activité
 ![Analyse 4](Images/analyse4.png)
+
+### Analyse 5 — Répartition des offres par type d'emploi
 ![Analyse 5](Images/analyse5.png)
+
+### Analyse 6 — Top 10 des entreprises qui recrutent le plus
 ![Analyse 6](Images/analyse6.png)
+
+### Analyse 7 — Répartition par niveau d'expérience
 ![Analyse 7](Images/analyse7.png)
+
+### Analyse 8 — Remote vs Présentiel
 ![Analyse 8](Images/analyse8.png)
+
+### Analyse 9 — Top 10 des localisations
 ![Analyse 9](Images/analyse9.png)
+
+### Analyse 10 — Salaire moyen par type de contrat
 ![Analyse 10](Images/analyse10.png)
+
+---
+
 ## ⚠️ Problèmes rencontrés et solutions apportées
 
+Au cours du projet, 17 problèmes techniques ont été identifiés et résolus.
+Voici le détail complet de chacun.
+
+---
+
 ### Problème 1 — Conversion des colonnes booléennes
+
 **Étape concernée :** Couche SILVER — Table `JOB_POSTINGS`
 
 **Erreur obtenue :**
@@ -878,10 +926,10 @@ Boolean value '1.0' is not recognized
 ```
 
 **Cause :** Les colonnes `remote_allowed`, `sponsored` et `inferred`
-contenaient des valeurs `1.0` et `0.0` au lieu de `TRUE`/`FALSE`.
+contenaient des valeurs `1.0` et `0.0` stockées en STRING.
 Snowflake ne reconnaît pas ce format pour un cast direct en BOOLEAN.
 
-**Solution :** Remplacement du cast `::BOOLEAN` par un `CASE WHEN` :
+**Solution :**
 ```sql
 CASE
     WHEN remote_allowed = '1.0' THEN TRUE
@@ -890,69 +938,409 @@ CASE
 END AS remote_allowed
 ```
 
+![Problème 1 — Erreur booléen](Images/probleme1_booleen.png)
+
 ---
 
 ### Problème 2 — Colonnes retournées en majuscules par Snowflake
+
 **Étape concernée :** Visualisations Streamlit
 
 **Erreur obtenue :**
 ```
-StreamlitColumnNotFoundError: Data does not have a column named "JOB_TITLE".
-Available columns are ``
+StreamlitColumnNotFoundError: Data does not have a column
+named "JOB_TITLE". Available columns are ``
 ```
 
 **Cause :** Snowflake retourne tous les noms de colonnes en majuscules
-(`JOB_TITLE`, `NB_POSTINGS`...) alors que Streamlit les cherche
-en minuscules dans `st.bar_chart()`.
+alors que Streamlit les cherche en minuscules dans `st.bar_chart()`.
 
-**Solution :** Conversion des données en DataFrame pandas avec
-mise en minuscules des colonnes :
+**Solution :**
 ```python
 data = session.sql("SELECT ...").to_pandas()
 data.columns = [c.lower() for c in data.columns]
 ```
 
+![Problème 2 — Erreur colonnes majuscules](Images/probleme2_majuscules.png)
+
 ---
 
 ### Problème 3 — Jointure incorrecte entre JOB_POSTINGS et COMPANIES
-**Étape concernée :** Couche GOLD — Analyses 1, 2 et 3
 
-**Symptôme :** Les graphiques des analyses 1, 2 et 3 étaient vides,
-aucune donnée n'était retournée.
+**Étape concernée :** Couche GOLD — Analyses 1, 2, 3 et 6
 
-**Cause :** La colonne `company_name` dans `JOB_POSTINGS` ne contient
-pas des noms d'entreprises mais des **IDs numériques stockés en float**
-(ex: `77766802.0`). La jointure avec `c.name` retournait donc 0 lignes.
+**Symptôme :** Les graphiques des analyses 1, 2, 3 et 6 étaient vides.
+
+**Cause :** La colonne `company_name` contient des IDs numériques
+en float (`77766802.0`) et non des noms d'entreprises.
+La jointure avec `c.name` retournait 0 lignes.
 
 **Diagnostic :**
 ```sql
--- company_name contient des IDs en float, pas des noms
 SELECT DISTINCT company_name
-FROM LINKEDIN.SILVER.JOB_POSTINGS
-LIMIT 5;
+FROM LINKEDIN.SILVER.JOB_POSTINGS LIMIT 5;
 -- Résultat : 3895037.0, 4422.0, 3738912.0...
 
--- La jointure directe retourne 0 lignes
 SELECT COUNT(*)
 FROM LINKEDIN.SILVER.JOB_POSTINGS jp
-JOIN LINKEDIN.SILVER.COMPANIES c
-    ON jp.company_name = c.name;
+JOIN LINKEDIN.SILVER.COMPANIES c ON jp.company_name = c.name;
 -- Résultat : 0
 ```
 
-**Solution :** Conversion de `company_name` en INT pour le faire
-correspondre au `company_id` de la table `COMPANIES` :
+**Solution :**
 ```sql
 JOIN LINKEDIN.SILVER.COMPANIES c
     ON jp.company_name::FLOAT::INT = c.company_id
 ```
 
+![Problème 3 — Jointure vide COUNT 0](Images/probleme3_jointure.png)
+
 ---
 
-### Récapitulatif des problèmes
+### Problème 4 — Salaire médian absent des données
+
+**Étape concernée :** Analyses 2 et 10
+
+**Symptôme :** La colonne `avg_med_salary` affichait `None`
+dans toutes les lignes.
+
+**Cause :** Le champ `med_salary` est absent ou vide dans
+la majorité des offres LinkedIn publiées.
+
+**Solution :** Calcul du salaire médian comme moyenne
+entre le salaire minimum et maximum :
+```sql
+ROUND(AVG((max_salary + min_salary) / 2), 2) AS avg_med_salary
+```
+
+![Problème 4 — Salaire médian vide](Images/probleme4_salaire.png)
+
+---
+
+### Problème 5 — Module Plotly non disponible dans Snowflake
+
+**Étape concernée :** Visualisations Streamlit
+
+**Erreur obtenue :**
+```
+ModuleNotFoundError: No module named 'plotly'
+```
+
+**Cause :** Plotly n'est pas disponible dans le channel Snowflake
+ni dans conda-forge pour l'environnement Streamlit hébergé.
+Même après ajout dans `environment.yml`, le module reste inaccessible.
+
+**Solution :** Utilisation d'Altair nativement disponible
+dans Snowflake Streamlit :
+```python
+import altair as alt
+fig = alt.Chart(data).mark_bar().encode(...)
+st.altair_chart(fig, use_container_width=True)
+```
+
+![Problème 5 — Erreur Plotly](Images/probleme5_plotly.png)
+
+---
+
+### Problème 6 — Extraction des champs JSON
+
+**Étape concernée :** Couche SILVER — Tables JSON
+
+**Symptôme :** Les tables chargées en BRONZE contenaient
+une seule colonne `data` de type VARIANT illisible directement.
+
+**Cause :** Les fichiers JSON sont stockés bruts dans une colonne
+VARIANT en BRONZE. Il faut les aplatir dans SILVER.
+
+**Solution :** Notation `data:champ::TYPE` de Snowflake :
+```sql
+CREATE TABLE LINKEDIN.SILVER.COMPANIES AS
+SELECT
+    data:company_id::INT     AS company_id,
+    data:name::STRING        AS name,
+    data:company_size::INT   AS company_size
+FROM LINKEDIN.BRONZE.COMPANIES;
+```
+
+![Problème 6 — JSON brut VARIANT](Images/probleme6_json.png)
+
+---
+
+### Problème 7 — Timestamps Unix non convertis
+
+**Étape concernée :** Couche SILVER — Colonnes de dates
+
+**Symptôme :** Les colonnes de dates affichaient des nombres
+comme `1693526400000` au lieu de dates lisibles.
+
+**Cause :** LinkedIn stocke les dates en millisecondes
+depuis l'epoch Unix (01/01/1970).
+
+**Solution :** Division par 1000 puis conversion :
+```sql
+TO_TIMESTAMP(original_listed_time::INT / 1000) AS original_listed_time
+```
+
+![Problème 7 — Timestamp Unix](Images/probleme7_timestamp.png)
+
+---
+
+### Problème 8 — Erreur de syntaxe dans Streamlit
+
+**Étape concernée :** Visualisations Streamlit — Analyse 5
+
+**Erreur obtenue :**
+```
+SyntaxError: '(' was never closed
+File "streamlit_app.py", line 270
+    y=alt.Y("work_type:N",
+           ^
+```
+
+**Cause :** Une parenthèse non fermée dans le code Python
+lors de la construction du graphique Altair.
+
+**Solution :** Réécriture du bloc en une seule ligne :
+```python
+y=alt.Y("work_type:N", sort="-x", title="Type d'emploi"),
+```
+
+![Problème 8 — Erreur syntaxe parenthèse](Images/probleme8_syntaxe.png)
+
+---
+
+### Problème 9 — Analyse 8 Remote affichait 100%
+
+**Étape concernée :** Couche GOLD — Vue `POSTINGS_BY_REMOTE`
+
+**Symptôme :** L'analyse 8 n'affichait que `Remote` à 100%
+sans la catégorie `Présentiel`.
+
+**Cause :** La vue SQL utilisait `WHERE remote_allowed IS NOT NULL`
+ce qui excluait les offres présentiel dont `remote_allowed = FALSE`.
+
+**Solution :** Suppression du filtre et gestion des trois cas :
+```sql
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.POSTINGS_BY_REMOTE AS
+SELECT
+    CASE
+        WHEN remote_allowed = TRUE  THEN 'Remote'
+        WHEN remote_allowed = FALSE THEN 'Présentiel'
+        ELSE 'Non renseigné'
+    END AS remote_label,
+    COUNT(*) AS nb_postings,
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS percentage
+FROM LINKEDIN.SILVER.JOB_POSTINGS
+GROUP BY remote_allowed
+ORDER BY nb_postings DESC;
+```
+
+![Problème 9 — Remote 100%](Images/probleme9_remote.png)
+
+---
+
+### Problème 10 — Création du dossier Images sur GitHub
+
+**Étape concernée :** Organisation du dépôt GitHub
+
+**Erreur obtenue :**
+```
+Sorry, a file exists where you're trying to create
+a subdirectory. Choose a new path and try again.
+```
+
+**Cause :** GitHub ne permet pas de créer un dossier vide.
+Il faut obligatoirement y créer un fichier en même temps.
+
+**Solution :** Création d'un fichier `README.md` placeholder
+dans le dossier pour forcer sa création :
+```
+Images/README.md
+```
+
+![Problème 10 — Dossier GitHub impossible](Images/probleme10_github.png)
+
+---
+
+### Problème 11 — Caractère spécial dans le code SQL collé dans Streamlit
+
+**Étape concernée :** Visualisations Streamlit
+
+**Erreur obtenue :**
+```
+SyntaxError: invalid character '—' (U+2014)
+File "/tmp/appRoot/streamlit_app.py", line 2
+```
+
+**Cause :** Le script SQL avait été collé par erreur dans
+le fichier Streamlit au lieu du fichier SQL Snowflake.
+Le tiret long `—` n'est pas un caractère Python valide.
+
+**Solution :** Coller chaque script dans le bon fichier :
+- Code SQL → Snowflake Worksheet
+- Code Python → Streamlit App
+
+---
+
+### Problème 12 — Graphiques vides après correction des jointures
+
+**Étape concernée :** Couche GOLD — Analyses 1, 2, 3
+
+**Symptôme :** Même après correction de la jointure,
+les graphiques restaient vides dans Streamlit.
+
+**Cause :** Les vues GOLD n'avaient pas été recréées
+après la modification du SQL. Streamlit utilisait
+encore les anciennes vues vides.
+
+**Solution :** Recréation forcée des vues avec `CREATE OR REPLACE` :
+```sql
+CREATE OR REPLACE VIEW LINKEDIN.GOLD.TOP_TITLES_BY_INDUSTRY AS ...
+```
+
+---
+
+### Problème 13 — STRIP_OUTER_ARRAY manquant pour les JSON
+
+**Étape concernée :** Setup — Format JSON
+
+**Symptôme :** Le chargement des fichiers JSON échouait
+ou chargeait les données dans une seule ligne au lieu
+de plusieurs lignes distinctes.
+
+**Cause :** Les fichiers JSON sont des tableaux `[{...}, {...}]`.
+Sans `STRIP_OUTER_ARRAY = TRUE`, Snowflake charge le tableau
+entier comme une seule valeur VARIANT.
+
+**Solution :**
+```sql
+CREATE OR REPLACE FILE FORMAT LINKEDIN.BRONZE.json_format
+    TYPE = 'JSON'
+    STRIP_OUTER_ARRAY = TRUE;
+```
+
+---
+
+### Problème 14 — Colonnes NULL dans les données brutes BRONZE
+
+**Étape concernée :** Chargement BRONZE — Fichier `job_postings.csv`
+
+**Symptôme :** Certaines colonnes comme `max_salary`,
+`min_salary` et `med_salary` affichaient des valeurs
+`NULL` ou vides dans de nombreuses lignes.
+
+**Cause :** LinkedIn ne rend pas obligatoire le renseignement
+des salaires dans les offres d'emploi. Ces colonnes sont
+facultatives dans le dataset source.
+
+**Solution :** Gestion des NULL dans les analyses GOLD
+avec des filtres appropriés :
+```sql
+WHERE max_salary IS NOT NULL
+AND min_salary IS NOT NULL
+```
+
+---
+
+### Problème 15 — Snowflake retourne les booléens comme NULL après CASE WHEN
+
+**Étape concernée :** Couche SILVER — Table `JOB_POSTINGS`
+
+**Symptôme :** Après correction du problème 1, certaines
+lignes de `remote_allowed` affichaient encore NULL
+au lieu de `TRUE` ou `FALSE`.
+
+**Cause :** Certaines valeurs de `remote_allowed` dans
+le CSV source n'étaient ni `1.0` ni `0.0` mais des
+chaînes vides ou des espaces.
+
+**Solution :** Ajout de la valeur vide dans le `NULL_IF`
+du format CSV :
+```sql
+CREATE OR REPLACE FILE FORMAT LINKEDIN.BRONZE.csv_format
+    TYPE = 'CSV'
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    NULL_IF = ('NULL', 'null', '', ' ');
+```
+
+---
+
+### Problème 16 — Erreur de variable non définie dans Streamlit
+
+**Étape concernée :** Visualisations Streamlit — Analyse 8
+
+**Erreur obtenue :**
+```
+NameError: name 'dat' is not defined
+File "/tmp/appRoot/streamlit_app.py", line 360
+    dat
+```
+
+**Cause :** Une faute de frappe dans le nom de la variable
+`data_8` tronqué en `dat` lors d'une modification du code.
+
+**Solution :** Vérification et correction du nom de variable :
+```python
+# Incorrect
+dat
+
+# Correct
+data_8
+```
+
+---
+
+### Problème 17 — Packages Streamlit non installés dans Snowflake
+
+**Étape concernée :** Visualisations Streamlit
+
+**Symptôme :** Certaines bibliothèques comme `plotly`
+étaient introuvables malgré leur ajout dans `environment.yml`.
+
+**Cause :** Le channel `snowflake` ne contient pas tous
+les packages disponibles sur PyPI. Seuls les packages
+validés par Snowflake sont disponibles.
+
+**Solution :** Utiliser uniquement les packages disponibles
+sur le channel Snowflake et vérifier la disponibilité
+avant de les ajouter :
+```yaml
+name: app_environment
+channels:
+  - snowflake
+dependencies:
+  - python=3.11.*
+  - snowflake-snowpark-python=1.48.1
+  - streamlit=1.52.2
+  - altair
+  - pandas
+  - numpy
+```
+
+---
+
+### Récapitulatif des 17 problèmes
 
 | # | Problème | Étape | Solution |
 |---|----------|-------|----------|
 | 1 | Booléens `1.0`/`0.0` non reconnus | SILVER | `CASE WHEN` |
 | 2 | Colonnes en majuscules dans Streamlit | Streamlit | `.to_pandas()` + `.lower()` |
 | 3 | `company_name` contient des IDs float | GOLD | `::FLOAT::INT` |
+| 4 | Salaire médian absent des données | GOLD | Calcul `(max + min) / 2` |
+| 5 | Module Plotly non disponible | Streamlit | Utilisation d'Altair |
+| 6 | Extraction des champs JSON | SILVER | Notation `data:champ::TYPE` |
+| 7 | Timestamps Unix non convertis | SILVER | `TO_TIMESTAMP(val / 1000)` |
+| 8 | Erreur de syntaxe parenthèse | Streamlit | Réécriture en ligne unique |
+| 9 | Remote affiché à 100% | GOLD | `CASE WHEN` sans filtre NULL |
+| 10 | Création dossier GitHub impossible | GitHub | Fichier `README.md` placeholder |
+| 11 | Caractère spécial `—` dans Python | Streamlit | Coller le bon code dans le bon fichier |
+| 12 | Graphiques vides après correction | GOLD | `CREATE OR REPLACE VIEW` |
+| 13 | `STRIP_OUTER_ARRAY` manquant | Setup | Ajout dans le format JSON |
+| 14 | Colonnes NULL dans les données | BRONZE | Filtres `IS NOT NULL` dans GOLD |
+| 15 | Booléens NULL après CASE WHEN | SILVER | Ajout de `' '` dans `NULL_IF` |
+| 16 | Variable non définie `dat` | Streamlit | Correction du nom de variable |
+| 17 | Packages indisponibles Snowflake | Streamlit | Utiliser uniquement le channel Snowflake |
+
+---
+

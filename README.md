@@ -1,6 +1,5 @@
 # MBAESG_EVALUATION_ARCHITECTURE_BIGDATA
 Analyse des offres d'emploi LinkedIn avec Snowflake
-
 # 🧊 Analyse des Offres d'Emploi LinkedIn avec Snowflake
 
 Ce projet s'inscrit dans le cadre d'une analyse du marché de l'emploi à partir de données réelles extraites de LinkedIn. L'objectif est de construire un pipeline de données complet, de l'ingestion des données brutes jusqu'à la visualisation des résultats.
@@ -38,7 +37,7 @@ Les fichiers sont chargés dans un entrepôt de données Snowflake via des scrip
 Une fois les données chargées, des transformations sont appliquées pour garantir la cohérence et l'intégrité des données : conversion des timestamps Unix, gestion des valeurs nulles, typage des colonnes et mise en relation des différentes tables.
 
 ### 4️⃣ Analyse et visualisation
-Cinq analyses sont réalisées sur les données pour explorer le marché de l'emploi, chacune accompagnée d'une visualisation interactive créée avec Streamlit directement dans Snowflake.
+Dix analyses sont réalisées sur les données pour explorer le marché de l'emploi, chacune accompagnée d'une visualisation interactive créée avec Streamlit directement dans Snowflake.
 
 ---
 
@@ -111,7 +110,7 @@ Les fichiers sont hébergés dans le bucket S3 public : `s3://snowflake-lab-buck
 ```
                     ┌─────────────────┐
                     │   JOB_POSTINGS  │
-                    │   (table centrale)│
+                    │  (table centrale)│
                     └────────┬────────┘
                              │ job_id
           ┌──────────────────┼──────────────────┐
@@ -143,7 +142,8 @@ Les fichiers sont hébergés dans le bucket S3 public : `s3://snowflake-lab-buck
 | **AWS S3** | — | Stockage des fichiers sources |
 | **Streamlit** | Intégré Snowflake | Visualisation interactive |
 | **SQL** | Snowflake SQL | Manipulation et transformation des données |
-| **Python** | 3.x | Code Streamlit |
+| **Python** | 3.11 | Code Streamlit |
+| **Altair** | — | Graphiques interactifs |
 | **GitHub** | — | Versioning et livrable final |
 
 ---
@@ -154,8 +154,20 @@ Les fichiers sont hébergés dans le bucket S3 public : `s3://snowflake-lab-buck
 MBAESG_EVALUATION_ARCHITECTURE_BIGDATA/
 │
 ├── README.md                    ← Présentation visuelle du projet (ce fichier)
+├── LINKEDIN_ANALYSIS.md         ← Code complet SQL + Python + explications
 │
-└── LINKEDIN_ANALYSIS.md         ← Code complet SQL + Python + explications
+└── Images/
+    ├── README.md
+    ├── analyse1.png
+    ├── analyse2.png
+    ├── analyse3.png
+    ├── analyse4.png
+    ├── analyse5.png
+    ├── analyse6.png
+    ├── analyse7.png
+    ├── analyse8.png
+    ├── analyse9.png
+    └── analyse10.png
 ```
 
 ---
@@ -181,21 +193,65 @@ S3 Bucket
 
 | # | Analyse | Type de graphique |
 |---|---------|------------------|
-| 1 | Top 10 des titres de postes les plus publiés par industrie | Graphique en barres |
-| 2 | Top 10 des postes les mieux rémunérés par industrie | Graphique en barres horizontales |
-| 3 | Répartition des offres par taille d'entreprise | Graphique en camembert |
-| 4 | Répartition des offres par secteur d'activité | Graphique en barres |
-| 5 | Répartition des offres par type d'emploi | Graphique en camembert |
+| 1 | Top 10 des titres de postes les plus publiés par industrie | Barres horizontales bleues |
+| 2 | Top 10 des postes les mieux rémunérés par industrie | Barres groupées bleu dégradé |
+| 3 | Répartition des offres par taille d'entreprise | Barres verticales multicolores |
+| 4 | Répartition des offres par secteur d'activité | Barres horizontales teal |
+| 5 | Répartition des offres par type d'emploi | Barres horizontales multicolores |
+| 6 | Top 10 des entreprises qui recrutent le plus | Barres horizontales oranges |
+| 7 | Répartition des offres par niveau d'expérience | Camembert multicolore |
+| 8 | Répartition Remote / Présentiel / Hybride | Barres + courbe + métriques |
+| 9 | Top 10 des localisations avec le plus d'offres | Barres horizontales vertes |
+| 10 | Salaire moyen par type de contrat | Barres groupées vertes |
 
 ---
 
-## Résultats obtenus
+## 📸 Résultats obtenus
 
-> 📸 Les captures d'écran des visualisations Streamlit seront ajoutées ici à la fin du projet.
+### Analyse 1 — Top 10 des titres de postes les plus publiés par industrie
+![Analyse 1](Images/analyse1.png)
+
+### Analyse 2 — Top 10 des postes les mieux rémunérés par industrie
+![Analyse 2](Images/analyse2.png)
+
+### Analyse 3 — Répartition des offres par taille d'entreprise
+![Analyse 3](Images/analyse3.png)
+
+### Analyse 4 — Répartition des offres par secteur d'activité
+![Analyse 4](Images/analyse4.png)
+
+### Analyse 5 — Répartition des offres par type d'emploi
+![Analyse 5](Images/analyse5.png)
+
+### Analyse 6 — Top 10 des entreprises qui recrutent le plus
+![Analyse 6](Images/analyse6.png)
+
+### Analyse 7 — Répartition des offres par niveau d'expérience
+![Analyse 7](Images/analyse7.png)
+
+### Analyse 8 — Répartition Remote / Présentiel / Hybride
+![Analyse 8](Images/analyse8.png)
+
+### Analyse 9 — Top 10 des localisations avec le plus d'offres
+![Analyse 9](Images/analyse9.png)
+
+### Analyse 10 — Salaire moyen par type de contrat
+![Analyse 10](Images/analyse10.png)
 
 ---
 
 ## Auteurs
 
-> Projet réalisé dans le cadre du cours **Architecture Big Data** — MBA ESG
-> Binôme : **Franck Jordan WAFO** & **Ibrahim-Khalil Meleissy CISSE**
+<div align="center">
+
+# 👨‍💻 Franck Jordan WAFO
+
+# 👨‍💻 Ibrahim-Khalil Meleissy CISSE
+
+**Projet réalisé dans le cadre du cours Architecture Big Data — MBA ESG**
+
+Soumis à : **axel@logbrain.fr**
+
+Intitulé : **MBAESG_EVALUATION_ARCHITECTURE_BIGDATA**
+
+</div>

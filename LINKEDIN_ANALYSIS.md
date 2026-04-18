@@ -1189,8 +1189,6 @@ CASE
 END AS remote_allowed
 ```
 
-![Problème 1 — Erreur booléen](Images/probleme1_booleen.png)
-
 ---
 
 ### Problème 2 — Colonnes retournées en majuscules par Snowflake
@@ -1211,8 +1209,6 @@ alors que Streamlit les cherche en minuscules dans `st.bar_chart()`.
 data = session.sql("SELECT ...").to_pandas()
 data.columns = [c.lower() for c in data.columns]
 ```
-
-![Problème 2 — Erreur colonnes majuscules](Images/probleme2_majuscules.png)
 
 ---
 
@@ -1244,7 +1240,6 @@ JOIN LINKEDIN.SILVER.COMPANIES c
     ON jp.company_name::FLOAT::INT = c.company_id
 ```
 
-![Problème 3 — Jointure vide COUNT 0](Images/probleme3_jointure.png)
 
 ---
 
@@ -1263,8 +1258,6 @@ entre le salaire minimum et maximum :
 ```sql
 ROUND(AVG((max_salary + min_salary) / 2), 2) AS avg_med_salary
 ```
-
-![Problème 4 — Salaire médian vide](Images/probleme4_salaire.png)
 
 ---
 
@@ -1289,8 +1282,6 @@ fig = alt.Chart(data).mark_bar().encode(...)
 st.altair_chart(fig, use_container_width=True)
 ```
 
-![Problème 5 — Erreur Plotly](Images/probleme5_plotly.png)
-
 ---
 
 ### Problème 6 — Extraction des champs JSON
@@ -1313,8 +1304,6 @@ SELECT
 FROM LINKEDIN.BRONZE.COMPANIES;
 ```
 
-![Problème 6 — JSON brut VARIANT](Images/probleme6_json.png)
-
 ---
 
 ### Problème 7 — Timestamps Unix non convertis
@@ -1331,8 +1320,6 @@ depuis l'epoch Unix (01/01/1970).
 ```sql
 TO_TIMESTAMP(original_listed_time::INT / 1000) AS original_listed_time
 ```
-
-![Problème 7 — Timestamp Unix](Images/probleme7_timestamp.png)
 
 ---
 
@@ -1355,8 +1342,6 @@ lors de la construction du graphique Altair.
 ```python
 y=alt.Y("work_type:N", sort="-x", title="Type d'emploi"),
 ```
-
-![Problème 8 — Erreur syntaxe parenthèse](Images/probleme8_syntaxe.png)
 
 ---
 
@@ -1386,8 +1371,6 @@ GROUP BY remote_allowed
 ORDER BY nb_postings DESC;
 ```
 
-![Problème 9 — Remote 100%](Images/probleme9_remote.png)
-
 ---
 
 ### Problème 10 — Création du dossier Images sur GitHub
@@ -1408,8 +1391,6 @@ dans le dossier pour forcer sa création :
 ```
 Images/README.md
 ```
-
-![Problème 10 — Dossier GitHub impossible](Images/probleme10_github.png)
 
 ---
 

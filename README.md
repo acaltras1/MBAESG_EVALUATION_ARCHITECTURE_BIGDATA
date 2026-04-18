@@ -1,5 +1,5 @@
 # MBAESG_EVALUATION_ARCHITECTURE_BIGDATA
-Analyse des offres d'emploi LinkedIn avec Snowflake
+
 # 🧊 Analyse des Offres d'Emploi LinkedIn avec Snowflake
 
 Ce projet s'inscrit dans le cadre d'une analyse du marché de l'emploi à partir de données réelles extraites de LinkedIn. L'objectif est de construire un pipeline de données complet, de l'ingestion des données brutes jusqu'à la visualisation des résultats.
